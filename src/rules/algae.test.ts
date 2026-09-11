@@ -9,6 +9,7 @@ const algae = (width: number, height: number): Cluster => ({
   rect: { x: 0, y: 0, width, height },
   hp: 1n,
   maxHp: 1n,
+  health: 64,
   resources: { amount: 0n, energy: 0n, amountCapacityBonus: 0n, energyCapacityBonus: 0n },
   motion: { px: 0n, py: 0n, density: 1n },
   armor: { up: 0n, right: 0n, down: 0n, left: 0n },

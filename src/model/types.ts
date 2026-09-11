@@ -44,10 +44,11 @@ export interface ArmorState {
 }
 
 export interface Cluster {
-  readonly id: ClusterId;
+  readonly   id: ClusterId;
   rect: ToroidalRect;
   hp: bigint;
   maxHp: bigint;
+  health: number;
   resources: ResourceState;
   motion: MotionState;
   armor: ArmorState;
@@ -68,12 +69,14 @@ export interface Cluster {
     reproduceCostEnergy?: number;
     cooldown?: number;
     lastProducedTick?: number;
+    activeTick?: number;
     compileBuffer?: string;
     compileEmitted?: string;
   }>;
   lifecycle: LifecycleState;
   geneHex?: string;
   note?: string;
+  dormant?: boolean;
   normalGroupId?: GroupId;
   algaeState?: {
     lockedDirection?: "up" | "right" | "down" | "left";
@@ -169,6 +172,7 @@ export interface ClusterView {
   height: number;
   hp: string;
   maxHp: string;
+  health: number;
   amount: string;
   energy: string;
   px: string;
@@ -177,6 +181,7 @@ export interface ClusterView {
   organelleRuntime?: Cluster["organelleRuntime"];
   geneHex?: string;
   note?: string;
+  dormant?: boolean;
 }
 
 export interface WorldSnapshot {

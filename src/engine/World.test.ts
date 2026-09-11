@@ -689,4 +689,22 @@ describe("World 确定性核心", () => {
     expect(world.seeds.size).toBe(1);
     expect(mother.resources.amount).toBe(15n);
   });
+
+  it("健康值随血量升降，低健康值休眠、归零坏死", () => {
+    const world = new World(1n, { base: 0, noiseAmplitude: 0, noiseScale: 64, maximum: 255, sources: [] });
+    const cluster = world.addCluster({ x: 10, y: 10, width: 5, height: 5 });
+    cluster.health = 40;
+    world.step();
+    expect(cluster.health).toBe(41);
+    cluster.hp = 1n;
+    cluster.health = 17;
+    world.step();
+    expect(cluster.health).toBe(16);
+    expect(cluster.dormant).toBe(true);
+    expect(world.clusters.size).toBe(1);
+    cluster.hp = 1n;
+    cluster.health = 1;
+    world.step();
+    expect(world.clusters.size).toBe(0);
+  });
 });

@@ -511,6 +511,7 @@ export class World {
         width: cluster.rect.width,
         height: cluster.rect.height,
         hp: cluster.hp.toString(),
+        health: cluster.health,
         maxHp: cluster.maxHp.toString(),
         amount: cluster.resources.amount.toString(),
         energy: cluster.resources.energy.toString(),
@@ -520,6 +521,7 @@ export class World {
         organelleRuntime: cluster.organelleRuntime,
         geneHex: cluster.geneHex,
         note: cluster.note,
+        dormant: cluster.dormant,
       })),
       seeds: [...this.seeds.values()].sort((a, b) => a.id - b.id).map((seed) => ({
         id: seed.id,
@@ -554,6 +556,7 @@ export class World {
         id: cluster.id,
         rect: cluster.rect,
         hp: cluster.hp.toString(),
+        health: cluster.health,
         maxHp: cluster.maxHp.toString(),
         resources: {
           amount: cluster.resources.amount.toString(),
@@ -577,6 +580,7 @@ export class World {
         lifecycle: cluster.lifecycle,
         geneHex: cluster.geneHex,
         note: cluster.note,
+        dormant: cluster.dormant,
         normalGroupId: cluster.normalGroupId,
         algaeState: cluster.algaeState,
       })),
@@ -644,6 +648,7 @@ export class World {
         id: item.id,
         rect: { ...item.rect },
         hp: BigInt(item.hp),
+        health: item.health ?? 64,
         maxHp: BigInt(item.maxHp),
         resources: {
           amount: BigInt(item.resources.amount),
@@ -667,6 +672,7 @@ export class World {
         lifecycle: item.lifecycle,
         geneHex: item.geneHex,
         note: item.note,
+        dormant: item.dormant,
         normalGroupId: item.normalGroupId,
         algaeState: item.algaeState,
       };
@@ -726,6 +732,31 @@ export class World {
     for (const cluster of [...this.clusters.values()].sort(stableClusterSort)) {
       const area = clusterArea(cluster);
       const upkeep = ceilDiv(area, 16n);
+
+      // 健康值系统（上限 64）：高血量提升健康值，低血量降低健康值。
+      const hpRatio = cluster.maxHp > 0n ? Number((cluster.hp * 100n) / cluster.maxHp) : 0;
+      if (hpRatio >= 75) cluster.health = Math.min(64, cluster.health + 1);
+      else if (hpRatio <= 25) cluster.health = Math.max(0, cluster.health - 1);
+
+      if (cluster.health === 0) {
+        // 坏死：血量归零，由死亡清理阶段移除。
+        cluster.hp = 0n;
+        continue;
+      }
+      // 健康值 <= 16 进入休眠；恢复后自动苏醒。
+      cluster.dormant = cluster.health <= 16;
+      if (cluster.dormant) {
+        cluster.motion.px = 0n;
+        cluster.motion.py = 0n;
+        // 休眠仍可通过覆盖格吸收自愈。
+        if (cluster.hp < cluster.maxHp && cluster.resources.energy >= upkeep * 2n) {
+          cluster.resources.energy -= 1n;
+          cluster.hp += 1n;
+          if (cluster.hp > cluster.maxHp) cluster.hp = cluster.maxHp;
+        }
+        continue;
+      }
+
       if (cluster.resources.energy >= upkeep) cluster.resources.energy -= upkeep;
       else {
         const availablePositive = cluster.resources.energy > 0n ? cluster.resources.energy : 0n;
@@ -739,6 +770,13 @@ export class World {
         const magnitude = bigintSqrt(magnitudeSquared);
         const excess = magnitude - 2n * threshold;
         cluster.hp -= (area * excess * excess) / (4n * threshold * threshold);
+      }
+
+      // 能量富余时缓慢回血，帮助健康值回升。
+      if (cluster.hp < cluster.maxHp && cluster.resources.energy >= upkeep * 2n) {
+        cluster.resources.energy -= 1n;
+        cluster.hp += 1n;
+        if (cluster.hp > cluster.maxHp) cluster.hp = cluster.maxHp;
       }
     }
     for (const group of [...this.normalGroups.values()].sort((a, b) => a.id - b.id)) {
@@ -884,6 +922,7 @@ export class World {
         py: cluster.motion.py,
         thresholdX: threshold,
         thresholdY: threshold,
+        immovable: cluster.dormant,
       });
       intents.push({
         bodyId,
@@ -1015,7 +1054,7 @@ export class World {
       .filter((cluster) => cluster.lifecycle.kind === "developing")
       .sort(stableClusterSort);
     for (const cluster of developingAtPhaseStart) {
-      if (cluster.lifecycle.kind !== "developing") continue;
+      if (cluster.lifecycle.kind !== "developing" || cluster.dormant) continue;
       const lifecycle = cluster.lifecycle;
       if (!this.clusters.has(lifecycle.motherId)) {
         cluster.lifecycle = { kind: "failed", reason: "母体已死亡" };
@@ -1122,7 +1161,7 @@ export class World {
   private runExistingOrganelleRules(): void {
     const customIntents: Array<DeclarativeIntent & { clusterId: number; organelleIndex: number }> = [];
     for (const cluster of [...this.clusters.values()].sort(stableClusterSort)) {
-      if (cluster.lifecycle.kind !== "active") continue;
+      if (cluster.lifecycle.kind !== "active" || cluster.dormant) continue;
       for (let index = 0; index < cluster.organelles.length; index += 1) {
         if (cluster.organelleRuntime[index]?.enabled === false) continue;
         const definition = this.organelleRegistry.get(cluster.organelles[index]);
@@ -1144,7 +1183,7 @@ export class World {
       }
     }
     for (const cluster of [...this.clusters.values()].sort(stableClusterSort)) {
-      if (cluster.lifecycle.kind !== "active") continue;
+      if (cluster.lifecycle.kind !== "active" || cluster.dormant) continue;
       const width = cluster.rect.width;
       for (let index = 0; index < cluster.organelles.length; index += 1) {
         const code = cluster.organelles[index];
@@ -1156,6 +1195,7 @@ export class World {
           const light = this.light.sample(cluster.rect.x + localX, cluster.rect.y + localY);
           const produced = Math.min(16, Math.floor(light / 16));
           cluster.resources.energy += BigInt(produced);
+          this.markActive(cluster, index);
         } else if (code === 0x0009) {
           if (!this.hasAdjacentPort(cluster, localX, localY, 0x0007)) continue;
           const portIndex = this.firstAdjacentPortIndex(cluster, index, 0x0007)!;
@@ -1185,6 +1225,7 @@ export class World {
             } else out = runtime?.latchValue ?? 0;
           }
           this.emitDigitalChannel(cluster.id, index, outChannel, clamp16(out));
+          this.markActive(cluster, index);
         } else if (code === 0x000c) {
           const compilePort = this.firstAdjacentPortIndex(cluster, index, 0x0008);
           if (compilePort === undefined) continue;
@@ -1214,6 +1255,7 @@ export class World {
             this.saveCompileTemplate(cluster, genome.normalizedHex);
             if (state.compileEmitted !== genome.normalizedHex) {
               this.emitCompileSignal(cluster.id, index, genome.normalizedHex);
+              this.markActive(cluster, index);
               state.compileEmitted = genome.normalizedHex;
             }
           } catch {
@@ -1239,6 +1281,7 @@ export class World {
             out = this.material.get(outside.x, outside.y).amount > 0n || this.cellOccupiedByWorld(outside.x, outside.y) ? 1 : 0;
           }
           this.emitDigitalSignal(cluster.id, index, out);
+          this.markActive(cluster, index);
         } else if (code === 0x000f && this.portAllowsResource(cluster, localX, localY, "energy")) {
           if (!this.digitalGateAllows(cluster, index)) continue;
           if (cluster.resources.energy < 1n) continue;
@@ -1247,6 +1290,7 @@ export class World {
           const force = Number.isInteger(runtime?.force) ? Math.max(1, Math.min(1024, runtime!.force!)) : 1;
           cluster.resources.energy -= 1n;
           this.addMomentumFromCluster(cluster, BigInt(vector.x * force), BigInt(vector.y * force));
+          this.markActive(cluster, index);
         } else if (code === 0x0011 && this.portAllowsResource(cluster, localX, localY, "amount")) {
           if (!this.digitalGateAllows(cluster, index)) continue;
           if (cluster.resources.amount < 1n) continue;
@@ -1258,6 +1302,7 @@ export class World {
           cluster.resources.amount -= 1n;
           this.material.add(outputX, outputY, { amount: 1n, energy: 0n });
           this.addMomentumFromCluster(cluster, BigInt(-vector.x), BigInt(-vector.y));
+          this.markActive(cluster, index);
         } else if (code === 0x0012) {
           const compilePort = this.firstAdjacentPortIndex(cluster, index, 0x0008);
           if (compilePort === undefined) continue;
@@ -1295,6 +1340,7 @@ export class World {
                   costAmount,
                   costEnergy,
                 });
+                this.markActive(cluster, index);
                 this.saveCompileTemplate(cluster, genome.normalizedHex);
               }
             } catch {
@@ -1358,6 +1404,11 @@ export class World {
     const localY = Math.floor(consumerIndex / cluster.rect.width);
     if (!this.hasAdjacentPort(cluster, localX, localY, 0x0007)) return false;
     return this.readDigitalChannel(cluster.id, consumerIndex, inputChannel) !== 0;
+  }
+
+  private markActive(cluster: Cluster, index: number): void {
+    const runtime = cluster.organelleRuntime[index] ??= { enabled: true };
+    runtime.activeTick = Number(this.tick);
   }
 
   private nearestSide(cluster: Cluster, index: number): AlgaeDirection {
@@ -1618,7 +1669,7 @@ export class World {
   private runAlgaeLifecycle(): void {
     const algaeAtPhaseStart = [...this.clusters.values()].filter(isAlgaeStructure).sort(stableClusterSort);
     for (const cluster of algaeAtPhaseStart) {
-      if (!this.clusters.has(cluster.id) || cluster.hp <= 0n) continue;
+      if (!this.clusters.has(cluster.id) || cluster.hp <= 0n || cluster.dormant) continue;
       cluster.algaeState ??= { age: 0 };
       cluster.algaeState.age += 1;
       if (cluster.algaeState.age % 60 === 0) {
@@ -1993,6 +2044,7 @@ export interface SerializedWorldState {
     rect: ToroidalRect;
     hp: string;
     maxHp: string;
+    health?: number;
     resources: {
       amount: string;
       energy: string;
@@ -2006,6 +2058,7 @@ export interface SerializedWorldState {
     lifecycle: Cluster["lifecycle"];
     geneHex?: string;
     note?: string;
+    dormant?: boolean;
     normalGroupId?: number;
     algaeState?: Cluster["algaeState"];
   }>;

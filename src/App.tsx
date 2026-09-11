@@ -18,6 +18,7 @@ import { translate, formatText, type TranslationKey } from "./settings/i18n";
 import { SettingsModal } from "./ui/SettingsModal";
 import { TourGuide } from "./ui/TourGuide";
 import { TeachingPanel } from "./ui/TeachingPanel";
+import { ShowcaseCanvas } from "./ui/ShowcaseCanvas";
 import { TEACHING_SPOTS, TEACHING_REGION, type TeachingSpot } from "./templates/teachingMap";
 import { WORLD_WIDTH, WORLD_HEIGHT, CHUNK_SIZE } from "./model/constants";
 import "./styles.css";
@@ -830,6 +831,7 @@ export function App() {
           <label class="grid-toggle"><input type="checkbox" checked={gridEnabled} onChange={(event) => setGridEnabled((event.target as HTMLInputElement).checked)} />{t("grid")}</label>
           <button class="settings-open" onClick={() => setShowNewProject(true)}>🗂 {t("templates")}</button>
           <button class="settings-open" onClick={startTeaching}>🎓 {t("teaching")}</button>
+          <a class="settings-open github-link" href="https://github.com/Anshonesoo/ClusterCA-Web" target="_blank" rel="noreferrer">🐙 GitHub</a>
           <button class="settings-open" onClick={() => setShowSettings(true)}>⚙ {t("settings")}</button>
         </div>
         <button
@@ -1094,11 +1096,12 @@ export function App() {
             </span>
           </label>
           <div class="template-grid">
-            <TemplateButton icon="🧱" title={t("templateBlank")} detail={t("templateBlankDesc")} onClick={() => createProject("blank")} />
+            <TemplateButton icon="🧱" title={t("templateBlank")} detail={t("templateBlankDesc")} locked lockLabel={t("notOpen")} onClick={() => createProject("blank")} />
             <TemplateButton icon="🌿" title={t("templateEcology")} detail={t("templateEcologyDesc")} onClick={() => createProject("ecology")} />
-            <TemplateButton icon="🛠️" title={t("templateCustom")} detail={t("templateCustomDesc")} onClick={() => createProject("custom")} />
-            <TemplateButton icon="🧪" title={t("templateDeveloper")} detail={t("templateDeveloperDesc")} onClick={() => createProject("developer")} />
+            <TemplateButton icon="🛠️" title={t("templateCustom")} detail={t("templateCustomDesc")} locked lockLabel={t("notOpen")} onClick={() => createProject("custom")} />
+            <TemplateButton icon="🧪" title={t("templateDeveloper")} detail={t("templateDeveloperDesc")} locked lockLabel={t("notOpen")} onClick={() => createProject("developer")} />
           </div>
+          <ShowcaseCanvas />
           {snapshot.clusters.length > 0 || snapshot.materialCells.length > 0
             ? <button class="modal-cancel" onClick={() => setShowNewProject(false)}>{t("cancel")}</button>
             : null}
@@ -1171,11 +1174,17 @@ function ClusterInspector({
 }) {
   const [note, setNote] = useState(cluster.note ?? "");
   useEffect(() => { setNote(cluster.note ?? ""); }, [cluster.id, cluster.note]);
+  const health = cluster.health ?? 64;
+  const healthStatus = health === 0 ? t("statusNecrotic")
+    : health <= 16 ? t("statusDormant")
+    : health >= 48 ? t("statusEnergetic")
+    : t("statusNormal");
   return <dl class="stats inspector">
     <dt>ID</dt><dd>#{cluster.id}</dd>
     <dt>矩形</dt><dd>{cluster.width} × {cluster.height}</dd>
     <dt>位置</dt><dd>{cluster.x}, {cluster.y}</dd>
     <dt>HP</dt><dd>{cluster.hp} / {cluster.maxHp}</dd>
+    <dt>{t("health")}</dt><dd>{health} / 64 · {healthStatus}</dd>
     <dt>物质</dt><dd>{cluster.amount}</dd>
     <dt>能量</dt><dd>{cluster.energy}</dd>
     <dt>计数器</dt><dd>({cluster.px}, {cluster.py})</dd>

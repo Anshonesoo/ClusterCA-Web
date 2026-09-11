@@ -55,6 +55,7 @@ export const createCluster = (id: ClusterId, rect: ToroidalRect): Cluster => {
     rect: { ...rect },
     hp: area * 4n,
     maxHp: area * 4n,
+    health: 64,
     resources: {
       amount: 0n,
       energy: area,

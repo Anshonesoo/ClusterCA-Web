@@ -16,6 +16,7 @@ export interface LayerVisibility {
 export interface ViewOptions {
   showGrid?: boolean;
   backgroundColor?: [number, number, number];
+  showOrganelles?: boolean;
 }
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
@@ -70,6 +71,7 @@ export class WebGLWorldRenderer {
 
   render(snapshot: WorldSnapshot, camera: Camera, layers: LayerVisibility, selectedId?: number, options?: ViewOptions): void {
     this.resize();
+    const tickNumber = Number(snapshot.tick);
     const gl = this.#gl;
     const lightBase = layers.light ? 0.055 : 0.025;
     const baseColor: [number, number, number] = options?.backgroundColor ?? [lightBase, lightBase * 1.35, lightBase * 1.2];
@@ -118,8 +120,8 @@ export class WebGLWorldRenderer {
         const gene = cluster.geneHex ? geneColorFor(cluster.geneHex) : undefined;
         const outline: [number, number, number] = selected
           ? [1, 0.76, 0.28]
-          : gene ?? [0.35, 0.9, 0.72];
-        if (camera.zoom >= 16) {
+          : cluster.dormant ? [0.55, 0.56, 0.6] : gene ?? [0.35, 0.9, 0.72];
+        if (camera.zoom >= 16 || options?.showOrganelles) {
           this.drawToroidalOutline(
             cluster.x,
             cluster.y,
@@ -145,19 +147,25 @@ export class WebGLWorldRenderer {
             if (code === 0 || code === 1) continue;
             const localX = index % cluster.width;
             const localY = Math.floor(index / cluster.width);
+            const runtime = cluster.organelleRuntime?.[index];
+            const active = runtime?.activeTick !== undefined && tickNumber - runtime.activeTick <= 1;
+            const base = organelleColor(code);
+            const color: [number, number, number] = active
+              ? [Math.min(1, base[0] * 1.7 + 0.25), Math.min(1, base[1] * 1.7 + 0.25), Math.min(1, base[2] * 1.7 + 0.25)]
+              : base;
             this.drawToroidalRect(
               cluster.x + localX + 0.16,
               cluster.y + localY + 0.16,
               0.68,
               0.68,
               camera,
-              organelleColor(code),
+              color,
             );
           }
         } else {
           const fill: [number, number, number] = selected
             ? [0.55, 0.4, 0.12]
-            : gene ? geneColorFor(cluster.geneHex!, 0.3) : [0.2, 0.56, 0.46];
+            : cluster.dormant ? [0.3, 0.32, 0.34] : gene ? geneColorFor(cluster.geneHex!, 0.3) : [0.2, 0.56, 0.46];
           this.drawToroidalRect(cluster.x, cluster.y, cluster.width, cluster.height, camera, fill);
           this.drawToroidalOutline(cluster.x, cluster.y, cluster.width, cluster.height, camera, outline, 2);
         }

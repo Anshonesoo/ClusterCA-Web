@@ -2,7 +2,7 @@
 
 > 版本：v0.2.0 · 作者：Anshonesoo
 
-ClusterCA 膜泡式元胞自动机的纯前端实现：确定性模拟核心、WebGL2 编辑器、项目保存导出、可扩展器官规则，以及内置教学模式。
+ClusterCA 是一套自研的**确定性人工生命（Artificial Life）仿真引擎**，面向**开放进化（Open-Ended Evolution）**与**自复制系统（Self-Replication）**研究。引擎基于 TypeScript / Preact / WebGL2 / Web Worker 构建，约 **48 个模块、7.5K+ 行源码**，在 **4.19M-cell 的双向连通环面状态空间（toroidal state space，1024 个 64×64 chunk，团簇 / 物质 / 光三层耦合）**上驱动 **10K+ 自主生命体接近实时演化**。其物理内核包含 **swept-AABB broad phase、contact graph、chain propagation、transactional commit 与全局 non-overlap assertion**，并自研 **spatial hashing** 将碰撞检测由 **O(n²) 压缩至近线性**，单步仿真耗时从 **22s 优化到 0.19s（>115× 加速）**。繁殖子系统实现了**冯诺依曼式自复制闭环**（gene compilation → processor validation → reproduction port → developmental ant），并带资源成本与冷却约束。平台进一步提供器官系统、刚性群组、趋光分裂等**涌现行为机制**，声明式规则与可信脚本沙箱的**可插拔扩展体系**，WebGL2 三层可视化与**数据驱动教学模式**，并以**零后端静态部署**交付（**83 tests / 12 suites，tsc & vite clean**），可作为**可复现强化学习环境**与**可编程物质（Programmable Matter）建模的数字孪生底座**。
 
 在线预览：https://anshonesoo.github.io/ClusterCA-Web/
 
